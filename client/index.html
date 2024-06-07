@@ -1,189 +1,189 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Realtime Database</title>
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css" integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous">
+    <link
+      rel="stylesheet"
+      href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css"
+      integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh"
+      crossorigin="anonymous"
+    />
     <style>
-        body {
-            font-family: "Roboto", Arial, Helvetica, sans-serif, Verdana;
-            background: #dee1e3;
-        }
-        .container {
-            margin-top: 50px;
-        }
-        .comments-container {
-            margin-top: 30px;
-        }
-        .comment-box {
-            margin-bottom: 20px;
-            padding: 10px;
-            background: #fff;
-            border-radius: 5px;
-            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-        }
-        .comment-box .comment-name {
-            font-weight: bold;
-        }
-        .comment-box .comment-date {
-            font-size: 0.9em;
-            color: #999;
-        }
+      body {
+        font-family: "Roboto", Arial, Helvetica, sans-serif, Verdana;
+        background: #dee1e3;
+      }
+      .container {
+        margin-top: 50px;
+      }
+      .comments-container {
+        margin-top: 30px;
+      }
+      .comment-box {
+        margin-bottom: 20px;
+        padding: 10px;
+        background: #fff;
+        border-radius: 5px;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+      }
+      .comment-box .comment-name {
+        font-weight: bold;
+      }
+      .comment-box .comment-date {
+        font-size: 0.9em;
+        color: #999;
+      }
     </style>
-</head>
-<body>
+  </head>
+  <body>
     <div class="container">
-        <h1>Comments</h1>
-        <form id="form">
-            <div class="form-group">
-                <input type="text" id="name" class="form-control" placeholder="Name" required>
-            </div>
-            <div class="form-group">
-                <textarea id="message" class="form-control" placeholder="Message" required></textarea>
-            </div>
-            <div class="form-group">
-                <button type="submit" class="btn btn-primary">Enviar Comentario</button>
-            </div>
-            <div id="responseMessage" class="alert" style="display: none;"></div>
-        </form>
-        <div class="comments-container">
-            <ul id="comments-list" class="list-unstyled"></ul>
+      <h1>Comments</h1>
+      <form id="form">
+        <div class="form-group">
+          <input
+            type="text"
+            id="name"
+            class="form-control"
+            placeholder="Name"
+            required
+          />
         </div>
+        <div class="form-group">
+          <textarea
+            id="message"
+            class="form-control"
+            placeholder="Message"
+            required
+          ></textarea>
+        </div>
+        <div class="form-group">
+          <button type="submit" class="btn btn-primary">
+            Enviar Comentario
+          </button>
+        </div>
+        <div id="responseMessage" class="alert" style="display: none"></div>
+      </form>
+      <div class="comments-container">
+        <ul id="comments-list" class="list-unstyled"></ul>
+      </div>
     </div>
 
     <script>
-        // Establecer la conexión con el WebSocket
-        const connection = new WebSocket('ws://localhost:3000');
-        const table = 'comentarios'; // Nombre de la tabla actualizado
+      const connection = new WebSocket("ws://localhost:3001");
+      const table = "comentarios"; // Nombre de la tabla actualizado
 
-        // Evento cuando se abre la conexión WebSocket
-        connection.onopen = function() {
-            connection.send(JSON.stringify({ type: 'subscribe', query: { table } }));
-        };
+      connection.onmessage = function (event) {
+        const data = JSON.parse(event.data);
+        if (data.new_val && !data.old_val) addCommentToList(data.new_val);
+        else if (data.new_val && data.old_val)
+          updateCommentOnList(data.old_val.date, data.new_val);
+        else if (data.old_val && !data.new_val)
+          deleteCommentFromList(data.old_val.date);
+      };
 
-        // Evento cuando ocurre un error en la conexión WebSocket
-        connection.onerror = function(error) {
-            console.error('WebSocket error:', error);
-        };
+      function deleteComment(commentId) {
+        fetch(
+          `http://localhost:3000/delete/${commentId}?db=test&table=comentarios`,
+          {
+            method: "DELETE",
+          }
+        ).catch((error) => console.error("Error deleting comment:", error));
+      }
 
-        // Evento cuando se recibe un mensaje a través del WebSocket
-        connection.onmessage = function(event) {
-            const data = JSON.parse(event.data);
-            if (data.type === 'add') {
-                const comment = data.new_val;
-                addCommentToList(comment);
-            }
-        };
+      function loadComments() {
+        fetch(`http://localhost:3000/get?db=test&table=comentarios`)
+          .then((response) => response.json())
+          .then((comments) => {
+            document.getElementById("comments-list").innerHTML = ""; // Limpiar la lista de comentarios antes de cargar los nuevos
+            comments.forEach((comment) => addCommentToList(comment));
+          })
+          .catch((error) => console.error("Failed to load comments:", error));
+      }
 
-        // Manejar el evento de envío del formulario
-        document.getElementById('form').addEventListener('submit', function(e) {
-            e.preventDefault();
-            const name = document.getElementById('name').value;
-            const message = document.getElementById('message').value;
-            fetch('http://localhost:3000/insert', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ db: 'test', table, data: { name, message, date: new Date() } })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.error) {
-                    alert('Failed to insert data: ' + data.error);
-                } else {
-                    addCommentToList({ name, message, date: new Date() });
-                    location.reload(); // Recargar la página después de la actualización
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-            });
-            document.getElementById('form').reset();
-        });
-
-        // Cargar los comentarios existentes al cargar la página
-        window.onload = function() {
-            fetch(`http://localhost:3000/get?db=test&table=${table}`)
-                .then(response => response.json())
-                .then(comments => {
-                    comments.forEach(comment => addCommentToList(comment));
-                })
-                .catch(error => console.error('Failed to load comments:', error));
-        };
-
-        // Función para recargar los comentarios
-        function reloadComments() {
-            fetch(`http://localhost:3000/get?db=test&table=comentarios`)
-                .then(response => response.json())
-                .then(comments => {
-                    if (Array.isArray(comments)) {
-                        fetch(`http://localhost:3000/get?db=test&table=${table}`)
-                            .then(response => response.json())
-                            .then(comments => {
-                                comments.forEach(comment => addCommentToList(comment));
-                            })
-                            .catch(error => console.error('Failed to load comments:', error));
-                    }
-                })
-                .catch(error => console.error('Failed to load comments:', error));
-        }
-
-        // Función para eliminar un comentario
-        function deleteComment(commentId) {
-            fetch(`http://localhost:3000/delete/${commentId}?db=test&table=comentarios`, {
-                method: 'DELETE'
-            })
-            .then(response => response.json())
-            .then(data => {
-                console.log('Deleted comment:', data);
-                loadComments(); // Recargar los comentarios después de eliminar uno
-            })
-            .catch(error => console.error('Error deleting comment:', error));
-        }
-
-        // Función para cargar los comentarios
-        function loadComments() {
-            fetch(`http://localhost:3000/get?db=test&table=comentarios`)
-                .then(response => response.json())
-                .then(comments => {
-                    document.getElementById('comments-list').innerHTML = ''; // Limpiar la lista de comentarios antes de cargar los nuevos
-                    comments.forEach(comment => addCommentToList(comment));
-                })
-                .catch(error => console.error('Failed to load comments:', error));
-        }
-
-        // Llama a la función loadComments() cuando se cargue la página inicialmente
-        window.onload = loadComments;
-
-        // Función para agregar un comentario a la lista
-        function addCommentToList(comment) {
-            const commentsList = document.getElementById('comments-list');
-            const commentElement = document.createElement('li');
-            commentElement.classList.add('comment-box');
-            commentElement.innerHTML = `
+      function addCommentToList(comment) {
+        const commentsList = document.getElementById("comments-list");
+        const commentElement = document.createElement("li");
+        commentElement.setAttribute("id", comment.date);
+        commentElement.classList.add("comment-box");
+        commentElement.innerHTML = `
                 <div class="comment-name">${comment.name}</div>
-                <div class="comment-date">${new Date(comment.date).toLocaleString()}</div>
+                <div class="comment-date">${new Date(
+                  comment.date
+                ).toLocaleString()}</div>
                 <div class="comment-message">${comment.message}</div>
-                <button class="btn btn-danger" onclick="deleteComment('${comment.id}')">Eliminar</button>
-                <button class="btn btn-primary edit-button" data-id="${comment.id}">Editar</button>
+                <button class="btn btn-danger" onclick="deleteComment('${
+                  comment.id
+                }')">Eliminar</button>
+                <button class="btn btn-primary edit-button" data-id="${
+                  comment.id
+                }">Editar</button>
             `;
-            commentsList.appendChild(commentElement);
-    
-            // Agregar event listener para el botón de editar
-            const editButton = commentElement.querySelector('.edit-button');
-            editButton.addEventListener('click', function() {
-                const commentId = this.getAttribute('data-id');
-                editComment(commentId);
-            });
-        }
+        commentsList.appendChild(commentElement);
 
-        // Función para redirigir a la página de edición con el ID del comentario
-        function editComment(commentId) {
-            window.location.href = `edit.html?id=${commentId}`;
-        }
+        // Add event listener for the edit button
+        const editButton = commentElement.querySelector(".edit-button");
+        editButton.addEventListener("click", function () {
+          const commentId = this.getAttribute("data-id");
+          editComment(commentId); // Call the editComment function when the edit button is clicked
+        });
+      }
+
+      function deleteCommentFromList(commentId) {
+        const commentElement = document.getElementById(commentId);
+        commentElement.remove();
+      }
+
+      function updateCommentOnList(oldCommentId, newComment) {
+        document.getElementById(oldCommentId).innerHTML = `
+            <div class="comment-name">${newComment.name}</div>
+            <div class="comment-date">${new Date(
+              newComment.date
+            ).toLocaleString()}</div>
+            <div class="comment-message">${newComment.message}</div>
+            <button class="btn btn-danger" onclick="deleteComment('${
+              newComment.id
+            }')">Eliminar</button>
+            <button class="btn btn-primary edit-button" data-id="${
+              newComment.id
+            }">Editar</button>
+        `;
+      }
+
+      function editComment(commentId) {
+        window.location.href = `edit.html?id=${commentId}`; // Redirect to edit.html with the comment ID
+      }
+
+      document.getElementById("form").addEventListener("submit", function (e) {
+        e.preventDefault();
+        const name = document.getElementById("name").value;
+        const message = document.getElementById("message").value;
+        fetch("http://localhost:3000/insert", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            db: "test",
+            table,
+            data: { name, message, date: new Date() },
+          }), // Actualización de la base de datos y tabla
+        })
+          .then((response) => response.json())
+          .then((data) => {
+            if (data.error) {
+              alert("Failed to insert data: " + data.error); // Mostrar el mensaje de error recibido del servidor
+            }
+          })
+          .catch((error) => {
+            console.error("Error:", error);
+          });
+        document.getElementById("form").reset();
+      });
+
+      // Llama a la función loadComments() cuando se cargue la página inicialmente
+      window.onload = loadComments;
     </script>
-</body>
+  </body>
 </html>
-
